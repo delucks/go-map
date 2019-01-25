@@ -91,7 +91,7 @@ func Run(flags *MapFlags, args []string) error {
 	shell_basename := flags.ShellInterpreter
 	idx := strings.LastIndex(flags.ShellInterpreter, "/")
 	if idx > 0 {
-		shell_basename = flags.ShellInterpreter[idx:]
+		shell_basename = flags.ShellInterpreter[idx+1:]
 	}
 	switch shell_basename {
 	case "ksh", "ksh93", "bash", "dash", "zsh", "sh":
