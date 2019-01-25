@@ -18,3 +18,11 @@ You can also get clever with `map -e`:
 map -f hosts -e 'ssh $1 df -h' | awk '{print $1, $(NF-1)}'
 ```
 Outputs the `<host, disk usage>` pairs
+
+By default, `map` uses the bash shell (at `/bin/bash`) for invoking workers. To change the shell, pass a different `-i`/`--shell-interpreter` option. All shells that implement a `-c` option are supported by `map`, this list has been tested and known to work:
+
+- `sh`
+- `ksh`
+- `bash`
+- `dash`
+- `zsh`

@@ -64,7 +64,8 @@ func NewCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&flags.OutputDelimiter, "output-delimiter", "o", " ",
 		"Can only be used in conjunction with the --echo flag, this specifies the delimiter used to separate the\n"+
 			DOC_INDENT+"input and output. Defaults to \" \"")
-
+	cmd.Flags().StringVarP(&flags.ShellInterpreter, "shell-interpreter", "i", "/bin/bash",
+		"Specify the command (absolute path if not in $PATH) to use as shell interpeter for each map worker\n")
 	return cmd
 }
 
@@ -76,11 +77,27 @@ type MapFlags struct {
 	LineDelimiter    string
 	EchoInput        bool
 	OutputDelimiter  string
+	ShellInterpreter string
 }
 
 func Run(flags *MapFlags, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("No function given!")
+	}
+
+	// check whether the users' shell is supported by sshc
+	// Most common shells support the -c command for specifying code to be run on the command-line
+	// If your shell does but isn't listed here, please file an issue!
+	shell_basename := flags.ShellInterpreter
+	idx := strings.LastIndex(flags.ShellInterpreter, "/")
+	if idx > 0 {
+		shell_basename = flags.ShellInterpreter[idx:]
+	}
+	switch shell_basename {
+	case "ksh", "ksh93", "bash", "dash", "zsh", "sh":
+		// great, this shell is supported
+	default:
+		return fmt.Errorf("Shell %s isn't yet supported by go-map", shell_basename)
 	}
 
 	for _, arg := range args {
@@ -107,9 +124,9 @@ func Run(flags *MapFlags, args []string) error {
 
 	fieldSplitter := regexp.MustCompile(flags.FieldDelimiter + "+")
 	if len(args) == 1 {
-		mapper.generateCmd = NumberedVars(args[0], fieldSplitter)
+		mapper.generateCmd = NumberedVars(args[0], flags.ShellInterpreter, fieldSplitter)
 	} else {
-		mapper.generateCmd = NamedVars(args[len(args)-1], args[:len(args)-1], fieldSplitter)
+		mapper.generateCmd = NamedVars(args[len(args)-1], flags.ShellInterpreter, args[:len(args)-1], fieldSplitter)
 	}
 
 	var lineSplitter = bufio.ScanLines
@@ -174,9 +191,9 @@ func ReadAllLines(f *os.File, lineSplitter bufio.SplitFunc, trimWhitespace bool,
 	}
 }
 
-func NamedVars(command string, varNames []string, fieldSplitter *regexp.Regexp) cmdGenerator {
+func NamedVars(command, shell string, varNames []string, fieldSplitter *regexp.Regexp) cmdGenerator {
 	return func(input string) *exec.Cmd {
-		process := exec.Command("/bin/bash", "-c", command)
+		process := exec.Command(shell, "-c", command)
 		env := os.Environ()
 		for i, v := range fieldSplitter.Split(input, len(varNames)) {
 			env = append(env, fmt.Sprintf("%s=%s", varNames[i], v))
@@ -186,10 +203,10 @@ func NamedVars(command string, varNames []string, fieldSplitter *regexp.Regexp) 
 	}
 }
 
-func NumberedVars(command string, fieldSplitter *regexp.Regexp) cmdGenerator {
+func NumberedVars(command, shell string, fieldSplitter *regexp.Regexp) cmdGenerator {
 	return func(input string) *exec.Cmd {
 		params := []string{"-c", command, ""}
 		params = append(params, fieldSplitter.Split(input, -1)...)
-		return exec.Command("/bin/bash", params...)
+		return exec.Command(shell, params...)
 	}
 }
