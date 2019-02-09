@@ -65,7 +65,8 @@ func NewCmd() *cobra.Command {
 		"Can only be used in conjunction with the --echo flag, this specifies the delimiter used to separate the\n"+
 			DOC_INDENT+"input and output. Defaults to \" \"")
 	cmd.Flags().StringVarP(&flags.ShellInterpreter, "shell-interpreter", "i", "/bin/bash",
-		"Specify the command (absolute path if not in $PATH) to use as shell interpeter for each map worker\n")
+		"Specify the command (absolute path if not in $PATH) to use as shell interpeter for each map worker.\n"+
+			DOC_INDENT+"Can be overridden with the MAP_SHELL_INTERPRETER environment variable.\n")
 	return cmd
 }
 
@@ -88,16 +89,22 @@ func Run(flags *MapFlags, args []string) error {
 	// check whether the users' shell is supported by sshc
 	// Most common shells support the -c command for specifying code to be run on the command-line
 	// If your shell does but isn't listed here, please file an issue!
-	shell_basename := flags.ShellInterpreter
-	idx := strings.LastIndex(flags.ShellInterpreter, "/")
-	if idx > 0 {
-		shell_basename = flags.ShellInterpreter[idx+1:]
+	var shellPath, shellBasename string
+	shellPath = os.Getenv("MAP_SHELL_INTERPRETER")
+	if shellPath == "" {
+		shellPath = flags.ShellInterpreter
 	}
-	switch shell_basename {
+	// Parse out the basename of the path to shell interpreter
+	shellBasename = shellPath
+	idx := strings.LastIndex(shellPath, "/")
+	if idx > 0 {
+		shellBasename = shellPath[idx+1:]
+	}
+	switch shellBasename {
 	case "ksh", "ksh93", "bash", "dash", "zsh", "sh":
 		// great, this shell is supported
 	default:
-		return fmt.Errorf("Shell %s isn't yet supported by go-map", shell_basename)
+		return fmt.Errorf("Shell %s isn't yet supported by go-map", shellBasename)
 	}
 
 	for _, arg := range args {
@@ -124,9 +131,9 @@ func Run(flags *MapFlags, args []string) error {
 
 	fieldSplitter := regexp.MustCompile(flags.FieldDelimiter + "+")
 	if len(args) == 1 {
-		mapper.generateCmd = NumberedVars(args[0], flags.ShellInterpreter, fieldSplitter)
+		mapper.generateCmd = NumberedVars(args[0], shellPath, fieldSplitter)
 	} else {
-		mapper.generateCmd = NamedVars(args[len(args)-1], flags.ShellInterpreter, args[:len(args)-1], fieldSplitter)
+		mapper.generateCmd = NamedVars(args[len(args)-1], shellPath, args[:len(args)-1], fieldSplitter)
 	}
 
 	var lineSplitter = bufio.ScanLines
